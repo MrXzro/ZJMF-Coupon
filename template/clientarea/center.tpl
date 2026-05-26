@@ -185,7 +185,7 @@
                                     <div>有效期：{{ expireText(coupon) }}</div>
                                     <div>使用范围：{{ coupon.product_text }}，{{ coupon.cycle_text }}</div>
                                     <div v-if="coupon.requires_text">前置条件：{{ coupon.requires_text }}</div>
-                                    <div>领取限制：{{ coupon.once_per_client ? '每个账号同一模板限领一次' : '每个账号可重复领取，但需先使用完已领取的同模板券' }}{{ coupon.require_paid ? '，需完成过支付' : '' }}{{ coupon.quota > 0 ? '，剩余 ' + coupon.quota_left + ' 张' : '' }}</div>
+                                    <div>领取限制：{{ limitText(coupon) }}{{ coupon.quota > 0 ? '，剩余 ' + coupon.quota_left + ' 张' : '' }}</div>
                                     <div v-if="coupon.code">券码：{{ coupon.code }}</div>
                                 </div>
                             </n-collapse-transition>
@@ -244,7 +244,7 @@
             const openedRules = ref({});
             const categories = [
                 { key: "all", label: "全部优惠券", icon: "全" },
-                { key: "new", label: "新用户专享", icon: "新" },
+                { key: "new", label: "新用户可领", icon: "新" },
                 { key: "once", label: "限领一次", icon: "限" },
                 { key: "percent", label: "折扣券", icon: "折" },
                 { key: "fixed", label: "满减券", icon: "减" }
@@ -265,7 +265,7 @@
                     if (page.value === "claimed") {
                         return coupon.item_kind === "record";
                     }
-                    return coupon.item_kind !== "record" && !!coupon.can_claim;
+                    return coupon.item_kind !== "record" && (!coupon.claimed || !!coupon.can_claim);
                 });
             });
 
@@ -288,7 +288,7 @@
 
             function categoryMatches(coupon, key) {
                 if (key === "all") return true;
-                if (key === "new") return Number(coupon.new_user_auto) === 1;
+                if (key === "new") return Number(coupon.new_user_only) === 1 || Number(coupon.new_user_auto) === 1;
                 if (key === "once") return Number(coupon.once_per_client) === 1;
                 if (key === "percent") return coupon.type === "percent";
                 if (key === "fixed") return coupon.type === "fixed";
@@ -337,6 +337,24 @@
                     return expireText(coupon);
                 }
                 return coupon.claim_reason || expireText(coupon);
+            }
+
+            function limitText(coupon) {
+                var parts = [];
+                if (Number(coupon.new_user_only) === 1) {
+                    parts.push("注册 " + (Number(coupon.new_user_days) || 7) + " 天内新用户可领");
+                }
+                parts.push(coupon.once_per_client ? "每个账号同一模板限领一次" : "可重复领取，但需先使用完已领取的同模板券");
+                if (Number(coupon.require_realname) === 1) {
+                    parts.push("需完成实名认证");
+                }
+                if (Number(coupon.require_paid) === 1) {
+                    parts.push("需完成过支付");
+                }
+                if (Number(coupon.new_user_auto) === 1) {
+                    parts.push("注册满 1 天未领取自动发放");
+                }
+                return parts.join("，");
             }
 
             function expireText(coupon) {
@@ -432,6 +450,7 @@
                 statusText: statusText,
                 ticketStatus: ticketStatus,
                 ticketMeta: ticketMeta,
+                limitText: limitText,
                 expireText: expireText,
                 toggleRule: toggleRule,
                 claimCoupon: claimCoupon

@@ -26,9 +26,20 @@ class CouponService
             }
             $prefix = preg_replace('/[^a-zA-Z0-9_]/', '', $prefix);
             $table = $prefix . 'qingjiyun_coupon_template';
-            if (empty(Db::query("SHOW COLUMNS FROM `{$table}` LIKE 'once_per_client'"))) {
-                Db::execute("ALTER TABLE `{$table}` ADD `once_per_client` tinyint(1) NOT NULL DEFAULT '1' AFTER `require_paid`");
+            if (empty(Db::query("SHOW COLUMNS FROM `{$table}` LIKE 'new_user_only'"))) {
+                Db::execute("ALTER TABLE `{$table}` ADD `new_user_only` tinyint(1) NOT NULL DEFAULT '0' AFTER `new_user_auto`");
             }
+            if (empty(Db::query("SHOW COLUMNS FROM `{$table}` LIKE 'new_user_days'"))) {
+                Db::execute("ALTER TABLE `{$table}` ADD `new_user_days` int(10) NOT NULL DEFAULT '7' AFTER `new_user_only`");
+            }
+            if (empty(Db::query("SHOW COLUMNS FROM `{$table}` LIKE 'require_realname'"))) {
+                Db::execute("ALTER TABLE `{$table}` ADD `require_realname` tinyint(1) NOT NULL DEFAULT '0' AFTER `require_paid`");
+            }
+            if (empty(Db::query("SHOW COLUMNS FROM `{$table}` LIKE 'once_per_client'"))) {
+                Db::execute("ALTER TABLE `{$table}` ADD `once_per_client` tinyint(1) NOT NULL DEFAULT '1' AFTER `require_realname`");
+            }
+            Db::execute("UPDATE `{$table}` SET `new_user_only` = 1 WHERE `new_user_auto` = 1 AND `new_user_only` = 0");
+            Db::execute("UPDATE `{$table}` SET `once_per_client` = 0 WHERE `new_user_only` = 1 AND `once_per_client` = 1");
         } catch (\Throwable $exception) {
             // Older installations will still try to run with the legacy schema.
         }
@@ -60,8 +71,9 @@ class CouponService
             return $this->error('券模板配额已用完');
         }
 
-        if (intval($template['require_paid']) === 1 && !$this->hasPaidInvoice($uid)) {
-            return $this->error('用户尚未完成过支付');
+        $conditionMessage = $this->claimConditionMessage($uid, $template, $client);
+        if ($conditionMessage !== '') {
+            return $this->error($conditionMessage);
         }
 
         $this->syncStatuses($uid);
@@ -85,6 +97,11 @@ class CouponService
             if (intval($lockedTemplate['quota']) > 0 && intval($lockedTemplate['issued_count']) >= intval($lockedTemplate['quota'])) {
                 Db::rollback();
                 return $this->error('券模板配额已用完');
+            }
+            $lockedConditionMessage = $this->claimConditionMessage($uid, $lockedTemplate, $client);
+            if ($lockedConditionMessage !== '') {
+                Db::rollback();
+                return $this->error($lockedConditionMessage);
             }
             $lockedOncePerClient = intval(isset($lockedTemplate['once_per_client']) ? $lockedTemplate['once_per_client'] : 1) === 1;
             $lockedDuplicateMessage = $this->duplicateIssueMessage($uid, $templateId, $source, $sourceRef, $lockedOncePerClient);
@@ -232,10 +249,12 @@ class CouponService
 
     public function userCoupons($uid, $status = '')
     {
+        self::ensureSchema();
+
         $this->syncStatuses($uid);
         $query = Db::name('qingjiyun_coupon_user')->alias('u')
             ->leftJoin('qingjiyun_coupon_template t', 'u.template_id = t.id')
-            ->field('u.*,t.title,t.description,t.type,t.value,t.require_paid,t.appliesto,t.cycles')
+            ->field('u.*,t.title,t.description,t.type,t.value,t.require_paid,t.require_realname,t.appliesto,t.cycles')
             ->where('u.uid', intval($uid));
         if ($status !== '') {
             $query->where('u.status', $status);
@@ -289,7 +308,9 @@ class CouponService
             }
         }
 
+        $client = Db::name('clients')->where('id', $uid)->field('id,create_time')->find();
         $hasPaid = null;
+        $realNameVerified = null;
         $items = [];
         foreach ($templates as $template) {
             $templateId = intval($template['id']);
@@ -300,9 +321,18 @@ class CouponService
             $quotaLeft = $quota > 0 ? max(0, $quota - $issuedCount) : -1;
             $soldOut = $quota > 0 && $issuedCount >= $quota;
             $requirePaid = intval(isset($template['require_paid']) ? $template['require_paid'] : 0) === 1;
+            $requireRealName = intval(isset($template['require_realname']) ? $template['require_realname'] : 0) === 1;
+            $newUserOnly = intval(isset($template['new_user_only']) ? $template['new_user_only'] : 0) === 1;
+            $newUserDays = intval(isset($template['new_user_days']) ? $template['new_user_days'] : 7);
+            if ($newUserOnly && $newUserDays <= 0) {
+                $newUserDays = 7;
+            }
             $oncePerClient = intval(isset($template['once_per_client']) ? $template['once_per_client'] : 1) === 1;
             if ($requirePaid && $hasPaid === null) {
                 $hasPaid = $this->hasPaidInvoice($uid);
+            }
+            if ($requireRealName && $realNameVerified === null) {
+                $realNameVerified = $this->isRealNameVerified($uid);
             }
 
             $hasRecord = !empty($record);
@@ -315,7 +345,8 @@ class CouponService
             }
             $claimed = $hasRecord;
             $blockedByClaim = $oncePerClient ? $hasRecord : $hasUnusedRecord;
-            $canClaim = !$blockedByClaim && !$soldOut && (!$requirePaid || $hasPaid);
+            $conditionMessage = $this->claimConditionMessage($uid, $template, $client, $hasPaid, $realNameVerified);
+            $canClaim = !$blockedByClaim && !$soldOut && $conditionMessage === '';
             $claimReason = '';
             if ($hasRecord && $oncePerClient) {
                 $claimReason = '您已领取过该优惠券';
@@ -323,8 +354,8 @@ class CouponService
                 $claimReason = '请先使用已领取的优惠券';
             } elseif ($soldOut) {
                 $claimReason = '优惠券已领完';
-            } elseif ($requirePaid && !$hasPaid) {
-                $claimReason = '需先完成一次支付';
+            } elseif ($conditionMessage !== '') {
+                $claimReason = $conditionMessage;
             }
 
             $items[] = [
@@ -349,7 +380,10 @@ class CouponService
                 'issued_count' => $issuedCount,
                 'quota_left' => $quotaLeft,
                 'new_user_auto' => intval(isset($template['new_user_auto']) ? $template['new_user_auto'] : 0),
+                'new_user_only' => $newUserOnly ? 1 : 0,
+                'new_user_days' => $newUserDays,
                 'require_paid' => $requirePaid ? 1 : 0,
+                'require_realname' => $requireRealName ? 1 : 0,
                 'once_per_client' => $oncePerClient ? 1 : 0,
                 'recurring' => intval(isset($template['recurring']) ? $template['recurring'] : 0),
                 'recurfor' => intval(isset($template['recurfor']) ? $template['recurfor'] : 0),
@@ -388,7 +422,10 @@ class CouponService
                     'issued_count' => $issuedCount,
                     'quota_left' => $quotaLeft,
                     'new_user_auto' => intval(isset($template['new_user_auto']) ? $template['new_user_auto'] : 0),
+                    'new_user_only' => $newUserOnly ? 1 : 0,
+                    'new_user_days' => $newUserDays,
                     'require_paid' => $requirePaid ? 1 : 0,
+                    'require_realname' => $requireRealName ? 1 : 0,
                     'once_per_client' => $oncePerClient ? 1 : 0,
                     'recurring' => intval(isset($template['recurring']) ? $template['recurring'] : 0),
                     'recurfor' => intval(isset($template['recurfor']) ? $template['recurfor'] : 0),
@@ -439,9 +476,11 @@ class CouponService
 
     public function validateOwnedCode($uid, $code)
     {
+        self::ensureSchema();
+
         $coupon = Db::name('qingjiyun_coupon_user')->alias('u')
             ->leftJoin('qingjiyun_coupon_template t', 'u.template_id = t.id')
-            ->field('u.*,t.title,t.require_paid,t.enabled')
+            ->field('u.*,t.title,t.require_paid,t.require_realname,t.enabled')
             ->where('u.uid', intval($uid))
             ->where('u.code', trim($code))
             ->find();
@@ -460,16 +499,22 @@ class CouponService
         if (intval($coupon['require_paid']) === 1 && !$this->hasPaidInvoice($uid)) {
             return $this->error('该优惠券需先完成一次支付');
         }
+        if (intval(isset($coupon['require_realname']) ? $coupon['require_realname'] : 0) === 1
+            && !$this->isRealNameVerified($uid)) {
+            return $this->error('该优惠券需先完成实名认证');
+        }
 
         return ['ok' => true, 'message' => '优惠券可用', 'data' => $coupon];
     }
 
     public function orderedUsableCoupons($uid)
     {
+        self::ensureSchema();
+
         $uid = intval($uid);
         $coupons = Db::name('qingjiyun_coupon_user')->alias('u')
             ->leftJoin('qingjiyun_coupon_template t', 'u.template_id = t.id')
-            ->field('u.id,u.code,u.expires_at,t.title,t.type,t.value,t.require_paid,t.enabled')
+            ->field('u.id,u.code,u.expires_at,t.title,t.type,t.value,t.require_paid,t.require_realname,t.enabled')
             ->where('u.uid', $uid)
             ->where('u.status', self::STATUS_UNUSED)
             ->select();
@@ -480,6 +525,10 @@ class CouponService
                 continue;
             }
             if (intval($coupon['expires_at']) > 0 && intval($coupon['expires_at']) < time()) {
+                continue;
+            }
+            if (intval(isset($coupon['require_realname']) ? $coupon['require_realname'] : 0) === 1
+                && !$this->isRealNameVerified($uid)) {
                 continue;
             }
             $usable[] = $coupon;
@@ -543,6 +592,83 @@ class CouponService
             ->where('status', 'Paid')->where('total', '>', 0)->count() > 0;
     }
 
+    public function claimConditionMessage($uid, $template, $client = null, $hasPaid = null, $realNameVerified = null)
+    {
+        $newUserMessage = $this->newUserBlockReason($uid, $template, $client);
+        if ($newUserMessage !== '') {
+            return $newUserMessage;
+        }
+
+        if (intval(isset($template['require_realname']) ? $template['require_realname'] : 0) === 1) {
+            if ($realNameVerified === null) {
+                $realNameVerified = $this->isRealNameVerified($uid);
+            }
+            if (!$realNameVerified) {
+                return '请先完成实名认证后再领取';
+            }
+        }
+
+        if (intval(isset($template['require_paid']) ? $template['require_paid'] : 0) === 1) {
+            if ($hasPaid === null) {
+                $hasPaid = $this->hasPaidInvoice($uid);
+            }
+            if (!$hasPaid) {
+                return '需先完成一次支付';
+            }
+        }
+
+        return '';
+    }
+
+    public function newUserBlockReason($uid, $template, $client = null)
+    {
+        if (intval(isset($template['new_user_only']) ? $template['new_user_only'] : 0) !== 1) {
+            return '';
+        }
+
+        if ($client === null) {
+            $client = Db::name('clients')->where('id', intval($uid))->field('id,create_time')->find();
+        }
+        if (!$client) {
+            return '无法确认注册时间';
+        }
+
+        $createTime = $this->clientCreateTime($client);
+        if ($createTime <= 0) {
+            return '无法确认注册时间';
+        }
+
+        $days = intval(isset($template['new_user_days']) ? $template['new_user_days'] : 7);
+        if ($days <= 0) {
+            $days = 7;
+        }
+        if (time() > $createTime + $days * 86400) {
+            return '仅限注册 ' . $days . ' 天内用户领取';
+        }
+
+        return '';
+    }
+
+    public function isRealNameVerified($uid)
+    {
+        $uid = intval($uid);
+        if ($uid <= 0) {
+            return false;
+        }
+
+        foreach (['certifi_person', 'certifi_company'] as $table) {
+            try {
+                if (Db::name($table)->where('auth_user_id', $uid)->where('status', 1)->find()) {
+                    return true;
+                }
+            } catch (\Throwable $exception) {
+                // Some installations may not enable the real-name module tables.
+            }
+        }
+
+        return false;
+    }
+
     private function duplicateIssueMessage($uid, $templateId, $source, $sourceRef, $oncePerClient)
     {
         $base = Db::name('qingjiyun_coupon_user')
@@ -599,11 +725,19 @@ class CouponService
         } else {
             $tags[] = '用完可再领';
         }
+        if (intval(isset($template['new_user_only']) ? $template['new_user_only'] : 0) === 1) {
+            $days = intval(isset($template['new_user_days']) ? $template['new_user_days'] : 7);
+            $tags[] = '新用户可领';
+            $tags[] = '注册 ' . max(1, $days) . ' 天内';
+        }
         if (intval(isset($template['new_user_auto']) ? $template['new_user_auto'] : 0) === 1) {
-            $tags[] = '新用户专享';
+            $tags[] = '未领 1 天后自动发';
         }
         if (intval(isset($template['require_paid']) ? $template['require_paid'] : 0) === 1) {
             $tags[] = '需完成支付';
+        }
+        if (intval(isset($template['require_realname']) ? $template['require_realname'] : 0) === 1) {
+            $tags[] = '需实名认证';
         }
         if (intval(isset($template['quota']) ? $template['quota'] : 0) > 0) {
             $tags[] = '限量 ' . intval($template['quota']) . ' 张';
@@ -703,6 +837,17 @@ class CouponService
         }
 
         return is_array($rows) ? $rows : [];
+    }
+
+    private function clientCreateTime($client)
+    {
+        $value = is_array($client) && isset($client['create_time']) ? $client['create_time'] : 0;
+        if (is_numeric($value)) {
+            return intval($value);
+        }
+
+        $timestamp = strtotime((string) $value);
+        return $timestamp ? intval($timestamp) : 0;
     }
 
     private function newCode()

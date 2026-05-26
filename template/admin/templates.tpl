@@ -56,14 +56,20 @@
                                 </select>
                             </div>
                             <div class="form-group col-md-2"><label>循环优惠次数</label><input class="form-control" type="number" min="0" name="recurfor" value="{if !empty($Edit)}{$Edit.recurfor}{else/}0{/if}"></div>
-                            <div class="form-group col-md-6 pt-4">
+                            <div class="form-group col-md-2"><label>新人可领天数</label><input class="form-control" type="number" min="1" name="new_user_days" value="{if !empty($Edit)}{$Edit.new_user_days}{else/}7{/if}"><small>注册 N 天内可领，自动发放建议 2 天以上</small></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group col-md-12">
                                 <label class="mr-3"><input type="checkbox" name="recurring" value="1" {if !empty($Edit) && $Edit.recurring}checked{/if}> 循环优惠</label>
                                 <label class="mr-3"><input type="checkbox" name="requires_exist" value="1" {if !empty($Edit) && $Edit.requires_exist}checked{/if}> 要求已有前置产品</label>
+                                <label class="mr-3"><input type="checkbox" name="new_user_only" value="1" {if !empty($Edit) && $Edit.new_user_only}checked{/if}> 新用户可领</label>
                                 <label class="mr-3"><input type="checkbox" name="once_per_client" value="1" {if empty($Edit) || $Edit.once_per_client}checked{/if}> 每账号限领一次</label>
-                                <label class="mr-3"><input type="checkbox" name="new_user_auto" value="1" {if !empty($Edit) && $Edit.new_user_auto}checked{/if}> 新用户自动发放</label>
+                                <label class="mr-3"><input type="checkbox" name="new_user_auto" value="1" {if !empty($Edit) && $Edit.new_user_auto}checked{/if}> 注册满 1 天未领自动发放</label>
                                 <label class="mr-3"><input type="checkbox" name="require_paid" value="1" {if !empty($Edit) && $Edit.require_paid}checked{/if}> 要求完成支付</label>
+                                <label class="mr-3"><input type="checkbox" name="require_realname" value="1" {if !empty($Edit) && $Edit.require_realname}checked{/if}> 需实名认证</label>
                                 <label><input type="checkbox" name="enabled" value="1" {if empty($Edit) || $Edit.enabled}checked{/if}> 启用模板</label>
-                                <small class="d-block text-muted mt-2">勾选后账号终身只能领取一次；取消勾选后，同模板未使用券存在时不能继续领取。</small>
+                                <small class="d-block text-muted mt-2">新用户可领与每账号限领一次互斥；未勾选限领一次时，同模板未使用券存在时不能继续领取，用完后可再领。</small>
+                                <small class="d-block text-muted">自动发放仅对新用户可领模板生效：注册满 1 天仍未领取时，由登录钩子或系统 cron 自动补发。</small>
                             </div>
                         </div>
                         <button class="btn btn-primary" type="submit">{if !empty($Edit)}保存修改{else/}创建模板{/if}</button>
@@ -79,7 +85,13 @@
                                 <td>{$item.type|htmlspecialchars} / {$item.value}</td>
                                 <td>{if $item.valid_days > 0}{$item.valid_days} 天{else/}永久{/if}</td>
                                 <td>{$item.issued_count} / {if $item.quota > 0}{$item.quota}{else/}不限{/if}</td>
-                                <td>{if $item.once_per_client}限领一次{else/}用完可再领{/if} {if $item.new_user_auto}新人券 {/if}{if $item.require_paid}需支付{/if}</td>
+                                <td>
+                                    {if $item.new_user_only}<span class="badge badge-info">新人 {$item.new_user_days} 天内</span>{/if}
+                                    {if $item.once_per_client}<span class="badge badge-primary">限领一次</span>{else/}<span class="badge badge-light">用完可再领</span>{/if}
+                                    {if $item.new_user_auto}<span class="badge badge-warning">1 天后自动发</span>{/if}
+                                    {if $item.require_paid}<span class="badge badge-secondary">需支付</span>{/if}
+                                    {if $item.require_realname}<span class="badge badge-success">需实名</span>{/if}
+                                </td>
                                 <td>{if $item.enabled}<span class="badge badge-success">启用</span>{else/}<span class="badge badge-secondary">停用</span>{/if}</td>
                                 <td>
                                     <a class="btn btn-sm btn-outline-primary" href="{$TemplatesUrl}&edit_id={$item.id}">编辑</a>
@@ -99,6 +111,42 @@
 <script>
 (function () {
     var form = document.getElementById('template-form');
+    var newUserOnly = form.querySelector('input[name="new_user_only"]');
+    var oncePerClient = form.querySelector('input[name="once_per_client"]');
+    var newUserAuto = form.querySelector('input[name="new_user_auto"]');
+    function syncNewUserOptions(changed) {
+        if (!newUserOnly || !oncePerClient) {
+            return;
+        }
+        if (changed === oncePerClient && oncePerClient.checked) {
+            newUserOnly.checked = false;
+            if (newUserAuto) {
+                newUserAuto.checked = false;
+            }
+        }
+        if (newUserAuto && newUserAuto.checked) {
+            newUserOnly.checked = true;
+        }
+        if (newUserOnly.checked) {
+            oncePerClient.checked = false;
+            oncePerClient.disabled = true;
+        } else {
+            oncePerClient.disabled = false;
+            if (newUserAuto) {
+                newUserAuto.checked = false;
+            }
+        }
+    }
+    if (newUserOnly) {
+        newUserOnly.addEventListener('change', function () { syncNewUserOptions(newUserOnly); });
+    }
+    if (oncePerClient) {
+        oncePerClient.addEventListener('change', function () { syncNewUserOptions(oncePerClient); });
+    }
+    if (newUserAuto) {
+        newUserAuto.addEventListener('change', function () { syncNewUserOptions(newUserAuto); });
+    }
+    syncNewUserOptions(null);
     function postForm(url, data) {
         return fetch(url, {method: 'POST', body: data, credentials: 'same-origin'})
             .then(function (response) {

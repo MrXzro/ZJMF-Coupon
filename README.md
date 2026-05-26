@@ -8,7 +8,7 @@
 - 后台“基础设置”可修改后续新发券的券码前缀。
 - 按 UID、用户组或全部活跃用户批量发券，模板可配置每账号限领一次或允许重复领取。
 - 前台领券中心展示当前可领取模板，用户可主动领取并跳转购物车使用。
-- 注册后首次登录 5 分钟新人窗口自动发券，支持同 IP 24 小时限制和临时邮箱域名拦截。
+- 新用户可领模板支持“注册 N 天内可领”、实名认证门槛、同 IP 24 小时限制和临时邮箱域名拦截；注册满 1 天仍未领取时可自动补发。
 - 连续签到奖励规则、用户签到日历和用户券包。
 - 领券记录支持筛选、单条删除和批量删除，已使用券保留订单审计记录。
 - 商品配置页可预选优惠券，添加购物车后在结算页自动走原生优惠码接口应用。
@@ -36,7 +36,7 @@
     $qjyCouponPrefix = (new \addons\qingjiyun_coupon\common\CouponService())->codePrefix();
 {/php}
 <script>window.QingjiyunCouponConfig={coupons:{:json_encode($qjyCouponData, JSON_UNESCAPED_UNICODE)},codePrefix:{:json_encode($qjyCouponPrefix, JSON_UNESCAPED_UNICODE)}};</script>
-<script src="/plugins/addons/qingjiyun_coupon/assets/configure-coupon.js?v=1.0.21"></script>
+<script src="/plugins/addons/qingjiyun_coupon/assets/configure-coupon.js?v=1.0.23"></script>
 ```
 
 结算页代码示例：
@@ -47,7 +47,7 @@
     $qjyCouponPrefix = (new \addons\qingjiyun_coupon\common\CouponService())->codePrefix();
 {/php}
 <script>window.QingjiyunCouponConfig={coupons:{:json_encode($qjyCouponData, JSON_UNESCAPED_UNICODE)},codePrefix:{:json_encode($qjyCouponPrefix, JSON_UNESCAPED_UNICODE)}};</script>
-<script src="/plugins/addons/qingjiyun_coupon/assets/cart.js?v=1.0.21"></script>
+<script src="/plugins/addons/qingjiyun_coupon/assets/cart.js?v=1.0.23"></script>
 ```
 
 `configure-coupon.js` 将已选券写入原配置表单并临时记录到下一次结算；`cart.js` 已适配当前主题的 `#promo input[name="promo"]` 结构和原生 `statuscart=promo`、`statuscart=removepromo` AJAX 接口，进入结算页后自动应用配置页选中的券。配置页与结算页直接内嵌当前用户可用券，不再请求前台 `/addons` JSON 接口。

@@ -63,9 +63,9 @@
             '.qjy-ticket-value:after{content:"";position:absolute;right:-8px;top:45px;width:16px;height:16px;border-radius:50%;background:#fff;}',
             '.qjy-ticket-amount{font-size:27px;font-weight:700;line-height:1.15;}',
             '.qjy-ticket-type{font-size:12px;margin-top:4px;}',
-            '.qjy-ticket-detail{display:flex;flex:1;min-width:0;flex-direction:column;justify-content:center;padding:13px 17px 12px 23px;}',
+            '.qjy-ticket-detail{display:flex;flex:1;min-width:0;flex-direction:column;justify-content:center;padding:13px 17px 12px 25px;}',
             '.qjy-ticket-title{color:#182230;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-            '.qjy-ticket-tag{display:inline-flex;align-self:flex-start;margin-top:6px;padding:2px 8px;border-radius:10px;color:#216cf5;background:#eef5ff;font-size:12px;}',
+            '.qjy-ticket-tag{display:inline-flex;align-self:flex-start;max-width:100%;margin-top:6px;padding:2px 8px;border-radius:10px;color:#216cf5;background:#eef5ff;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
             '.qjy-ticket-expire{margin-top:7px;color:#98a2b3;font-size:12px;}',
             '.qjy-coupon-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 23px;border-top:1px solid #edf1f7;}',
             '.qjy-coupon-tip{color:#98a2b3;font-size:12px;}',
@@ -310,6 +310,13 @@
         return '免费券';
     }
 
+    function tagText(coupon) {
+        if (coupon.type === 'fixed') return amount(coupon.value) + ' 元优惠券';
+        if (coupon.type === 'percent') return amount(coupon.value) + '% 折扣券';
+        if (coupon.type === 'override') return '一口价 ' + amount(coupon.value) + ' 元';
+        return '免费券';
+    }
+
     function expireText(timestamp) {
         if (!Number(timestamp)) return '永久有效';
         var date = new Date(Number(timestamp) * 1000);
@@ -381,7 +388,8 @@
             title.textContent = coupon.title || '优惠券';
             var tag = document.createElement('div');
             tag.className = 'qjy-ticket-tag';
-            tag.textContent = typeText(coupon);
+            tag.textContent = tagText(coupon);
+            tag.title = tagText(coupon);
             var expire = document.createElement('div');
             expire.className = 'qjy-ticket-expire';
             expire.textContent = expireText(coupon.expires_at);

@@ -14,9 +14,10 @@ class ThemeCouponProvider
         }
 
         try {
+            CouponService::ensureSchema();
             $rows = Db::name('qingjiyun_coupon_user')->alias('u')
                 ->leftJoin('qingjiyun_coupon_template t', 'u.template_id = t.id')
-                ->field('u.id,u.code,u.expires_at,t.title,t.type,t.value,t.require_paid,t.enabled,t.requires,t.requires_exist')
+                ->field('u.id,u.code,u.expires_at,t.title,t.type,t.value,t.require_paid,t.require_realname,t.enabled,t.requires,t.requires_exist')
                 ->where('u.uid', $uid)
                 ->where('u.status', 'unused')
                 ->select();
@@ -41,6 +42,7 @@ class ThemeCouponProvider
 
         $now = time();
         $hasPaid = null;
+        $realNameVerified = null;
         $usable = [];
         foreach ($rows as $coupon) {
             if (!is_array($coupon)) {
@@ -61,6 +63,14 @@ class ThemeCouponProvider
                     continue;
                 }
             }
+            if (intval(isset($coupon['require_realname']) ? $coupon['require_realname'] : 0) === 1) {
+                if ($realNameVerified === null) {
+                    $realNameVerified = self::isRealNameVerified($uid);
+                }
+                if (!$realNameVerified) {
+                    continue;
+                }
+            }
 
             $usable[] = [
                 'id' => intval(isset($coupon['id']) ? $coupon['id'] : 0),
@@ -70,6 +80,7 @@ class ThemeCouponProvider
                 'type' => (string) (isset($coupon['type']) ? $coupon['type'] : ''),
                 'value' => floatval(isset($coupon['value']) ? $coupon['value'] : 0),
                 'require_paid' => intval(isset($coupon['require_paid']) ? $coupon['require_paid'] : 0),
+                'require_realname' => intval(isset($coupon['require_realname']) ? $coupon['require_realname'] : 0),
                 'requires' => (string) (isset($coupon['requires']) ? $coupon['requires'] : ''),
                 'requires_exist' => intval(isset($coupon['requires_exist']) ? $coupon['requires_exist'] : 0),
                 'requires_text' => self::requiresText($coupon, $productNames),
@@ -117,6 +128,21 @@ class ThemeCouponProvider
         } catch (\Throwable $exception) {
             return false;
         }
+    }
+
+    private static function isRealNameVerified($uid)
+    {
+        foreach (['certifi_person', 'certifi_company'] as $table) {
+            try {
+                if (Db::name($table)->where('auth_user_id', intval($uid))->where('status', 1)->find()) {
+                    return true;
+                }
+            } catch (\Throwable $exception) {
+                // The host may not have real-name tables enabled.
+            }
+        }
+
+        return false;
     }
 
     private static function requiresText($coupon, array $productNames)

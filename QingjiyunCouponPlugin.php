@@ -15,7 +15,7 @@ class QingjiyunCouponPlugin extends Plugin
         'description' => '原生优惠码驱动的领券、批量发券、新人券和签到奖励插件',
         'status' => 1,
         'author' => '轻极云',
-        'version' => '1.0.21',
+        'version' => '1.0.23',
         'module' => 'addons',
         'lang' => [
             'chinese' => '轻极云优惠券',
@@ -44,14 +44,18 @@ class QingjiyunCouponPlugin extends Plugin
                 `quota` int(10) NOT NULL DEFAULT '0',
                 `issued_count` int(10) NOT NULL DEFAULT '0',
                 `new_user_auto` tinyint(1) NOT NULL DEFAULT '0',
+                `new_user_only` tinyint(1) NOT NULL DEFAULT '0',
+                `new_user_days` int(10) NOT NULL DEFAULT '7',
                 `require_paid` tinyint(1) NOT NULL DEFAULT '0',
+                `require_realname` tinyint(1) NOT NULL DEFAULT '0',
                 `once_per_client` tinyint(1) NOT NULL DEFAULT '1',
                 `enabled` tinyint(1) NOT NULL DEFAULT '1',
                 `create_time` int(11) NOT NULL DEFAULT '0',
                 `update_time` int(11) NOT NULL DEFAULT '0',
                 PRIMARY KEY (`id`),
                 KEY `enabled` (`enabled`),
-                KEY `new_user_auto` (`new_user_auto`)
+                KEY `new_user_auto` (`new_user_auto`),
+                KEY `new_user_only` (`new_user_only`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轻极云优惠券模板'",
             "CREATE TABLE IF NOT EXISTS `{$prefix}qingjiyun_coupon_user` (
                 `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
@@ -153,7 +157,12 @@ class QingjiyunCouponPlugin extends Plugin
 
     public function afterCron()
     {
-        (new CouponService())->syncStatuses();
+        try {
+            (new CouponService())->syncStatuses();
+            (new RiskService())->grantDelayedNewUserCoupons();
+        } catch (\Throwable $exception) {
+            // Marketing cron tasks must not interrupt the host cron flow.
+        }
     }
 
     private function tablePrefix()

@@ -104,6 +104,20 @@ class AdminIndexController extends PluginAdminBaseController
                 return json(['status' => 400, 'msg' => '百分比折扣不能大于 100']);
             }
 
+            $newUserOnly = !empty($input['new_user_only']) ? 1 : 0;
+            $newUserAuto = !empty($input['new_user_auto']) ? 1 : 0;
+            if ($newUserAuto) {
+                $newUserOnly = 1;
+            }
+            $oncePerClient = !empty($input['once_per_client']) ? 1 : 0;
+            if ($newUserOnly) {
+                $oncePerClient = 0;
+            }
+            $newUserDays = max(0, intval($input['new_user_days'] ?? 7));
+            if ($newUserOnly && $newUserDays <= 0) {
+                $newUserDays = 7;
+            }
+
             $data = [
                 'title' => $title,
                 'description' => trim((string) ($input['description'] ?? '')),
@@ -117,9 +131,12 @@ class AdminIndexController extends PluginAdminBaseController
                 'recurfor' => max(0, intval($input['recurfor'] ?? 0)),
                 'valid_days' => max(0, intval($input['valid_days'] ?? 30)),
                 'quota' => max(0, intval($input['quota'] ?? 0)),
-                'new_user_auto' => !empty($input['new_user_auto']) ? 1 : 0,
+                'new_user_auto' => $newUserAuto,
+                'new_user_only' => $newUserOnly,
+                'new_user_days' => $newUserDays,
                 'require_paid' => !empty($input['require_paid']) ? 1 : 0,
-                'once_per_client' => !empty($input['once_per_client']) ? 1 : 0,
+                'require_realname' => !empty($input['require_realname']) ? 1 : 0,
+                'once_per_client' => $oncePerClient,
                 'enabled' => !empty($input['enabled']) ? 1 : 0,
                 'update_time' => time(),
             ];
@@ -325,10 +342,12 @@ class AdminIndexController extends PluginAdminBaseController
                 'ok' => !empty(Db::query("SHOW TABLES LIKE '{$name}'")),
             ];
         }
-        $checks[] = [
-            'name' => '模板字段 once_per_client',
-            'ok' => !empty(Db::query("SHOW COLUMNS FROM `{$prefix}qingjiyun_coupon_template` LIKE 'once_per_client'")),
-        ];
+        foreach (['once_per_client', 'new_user_only', 'new_user_days', 'require_realname'] as $column) {
+            $checks[] = [
+                'name' => '模板字段 ' . $column,
+                'ok' => !empty(Db::query("SHOW COLUMNS FROM `{$prefix}qingjiyun_coupon_template` LIKE '{$column}'")),
+            ];
+        }
         foreach (['code', 'type', 'value', 'expiration_time', 'max_times', 'used'] as $column) {
             $checks[] = [
                 'name' => '原生优惠码字段 ' . $column,
@@ -372,9 +391,9 @@ class AdminIndexController extends PluginAdminBaseController
             '{/php}' . PHP_EOL;
         $configSnippet = '<script>window.QingjiyunCouponConfig={coupons:{:json_encode($qjyCouponData, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)},codePrefix:{:json_encode($qjyCouponPrefix, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)}};</script>' . PHP_EOL;
         $snippet = $providerSnippet . $configSnippet .
-            '<script src="/plugins/addons/qingjiyun_coupon/assets/cart.js?v=1.0.21"></script>';
+            '<script src="/plugins/addons/qingjiyun_coupon/assets/cart.js?v=1.0.23"></script>';
         $configureSnippet = '{if $userinfo}' . PHP_EOL . $providerSnippet . $configSnippet .
-            '<script src="/plugins/addons/qingjiyun_coupon/assets/configure-coupon.js?v=1.0.21"></script>' . PHP_EOL .
+            '<script src="/plugins/addons/qingjiyun_coupon/assets/configure-coupon.js?v=1.0.23"></script>' . PHP_EOL .
             '{/if}';
         $this->assign('Title', '插件检测与集成');
         $this->assign('Checks', $checks);
