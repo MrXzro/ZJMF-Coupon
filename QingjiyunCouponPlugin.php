@@ -15,7 +15,7 @@ class QingjiyunCouponPlugin extends Plugin
         'description' => '原生优惠码驱动的领券、批量发券、新人券和签到奖励插件',
         'status' => 1,
         'author' => '轻极云',
-        'version' => '1.0.24',
+        'version' => '1.1.0',
         'module' => 'addons',
         'lang' => [
             'chinese' => '轻极云优惠券',

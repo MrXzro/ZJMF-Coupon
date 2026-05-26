@@ -412,9 +412,9 @@ class AdminIndexController extends PluginAdminBaseController
             '{/php}' . PHP_EOL;
         $configSnippet = '<script>window.QingjiyunCouponConfig={coupons:{:json_encode($qjyCouponData, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)},codePrefix:{:json_encode($qjyCouponPrefix, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)},loggedIn:{:json_encode($qjyUid > 0)}};</script>' . PHP_EOL;
         $snippet = $providerSnippet . $configSnippet .
-            '<script src="/plugins/addons/qingjiyun_coupon/assets/cart.js?v=1.0.24"></script>';
+            '<script src="/plugins/addons/qingjiyun_coupon/assets/cart.js?v=1.1.0"></script>';
         $configureSnippet = '{if $userinfo}' . PHP_EOL . $providerSnippet . $configSnippet .
-            '<script src="/plugins/addons/qingjiyun_coupon/assets/configure-coupon.js?v=1.0.24"></script>' . PHP_EOL .
+            '<script src="/plugins/addons/qingjiyun_coupon/assets/configure-coupon.js?v=1.1.0"></script>' . PHP_EOL .
             '{/if}';
         $this->assign('Title', '插件检测与集成');
         $this->assign('Checks', $checks);
