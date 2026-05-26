@@ -586,6 +586,38 @@ class CouponService
         return ['ok' => true, 'message' => $message, 'data' => ['deleted' => $deleted, 'protected' => $protected]];
     }
 
+    public function deleteTemplate($templateId)
+    {
+        self::ensureSchema();
+
+        $templateId = intval($templateId);
+        if ($templateId <= 0) {
+            return $this->error('请选择要删除的券模板');
+        }
+
+        $template = Db::name('qingjiyun_coupon_template')->where('id', $templateId)->find();
+        if (!$template) {
+            return $this->error('券模板不存在');
+        }
+
+        $issued = Db::name('qingjiyun_coupon_user')->where('template_id', $templateId)->count();
+        if ($issued > 0) {
+            return $this->error('该模板已有 ' . intval($issued) . ' 张发放记录。请先在领券记录中删除未使用券；已使用券建议保留审计，可停用模板。');
+        }
+
+        Db::startTrans();
+        try {
+            Db::name('qingjiyun_coupon_signin_rule')->where('template_id', $templateId)->delete();
+            Db::name('qingjiyun_coupon_template')->where('id', $templateId)->delete();
+            Db::commit();
+        } catch (\Throwable $exception) {
+            Db::rollback();
+            return $this->error('模板删除失败：' . $exception->getMessage());
+        }
+
+        return ['ok' => true, 'message' => '券模板已删除', 'data' => ['id' => $templateId]];
+    }
+
     public function hasPaidInvoice($uid)
     {
         return Db::name('invoices')->where('uid', intval($uid))

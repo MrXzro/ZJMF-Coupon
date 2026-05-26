@@ -96,6 +96,7 @@
                                 <td>
                                     <a class="btn btn-sm btn-outline-primary" href="{$TemplatesUrl}&edit_id={$item.id}">编辑</a>
                                     <button class="btn btn-sm btn-outline-secondary toggle-btn" data-id="{$item.id}" data-enabled="{if $item.enabled}0{else/}1{/if}">{if $item.enabled}停用{else/}启用{/if}</button>
+                                    <button class="btn btn-sm btn-outline-danger delete-btn" data-id="{$item.id}" data-title="{$item.title|htmlspecialchars}">删除</button>
                                 </td>
                             </tr>
                             {/foreach}
@@ -172,6 +173,19 @@
             data.append('id', button.getAttribute('data-id'));
             data.append('enabled', button.getAttribute('data-enabled'));
             postForm('{$ToggleUrl}', data)
+                .then(function (result) { alert(result.msg); if (result.status === 200) { location.reload(); } })
+                .catch(function (error) { alert(error.message); });
+        });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.delete-btn'), function (button) {
+        button.addEventListener('click', function () {
+            var title = button.getAttribute('data-title') || '该模板';
+            if (!confirm('确定删除“' + title + '”吗？已有发放记录的模板会被系统阻止删除，避免影响用户券包。')) {
+                return;
+            }
+            var data = new FormData();
+            data.append('id', button.getAttribute('data-id'));
+            postForm('{$DeleteUrl}', data)
                 .then(function (result) { alert(result.msg); if (result.status === 200) { location.reload(); } })
                 .catch(function (error) { alert(error.message); });
         });

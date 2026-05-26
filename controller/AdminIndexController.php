@@ -74,6 +74,7 @@ class AdminIndexController extends PluginAdminBaseController
         $this->assign('TemplatesUrl', shd_addon_url('QingjiyunCoupon://AdminIndex/templates'));
         $this->assign('SaveUrl', shd_addon_url('QingjiyunCoupon://AdminIndex/saveTemplate'));
         $this->assign('ToggleUrl', shd_addon_url('QingjiyunCoupon://AdminIndex/toggleTemplate'));
+        $this->assign('DeleteUrl', shd_addon_url('QingjiyunCoupon://AdminIndex/deleteTemplate'));
 
         return $this->fetch('/templates');
     }
@@ -171,6 +172,25 @@ class AdminIndexController extends PluginAdminBaseController
         }
 
         return json(['status' => 200, 'msg' => '状态已更新']);
+    }
+
+    public function deleteTemplate()
+    {
+        if (!request()->isPost()) {
+            return json(['status' => 405, 'msg' => '请求方式错误', 'data' => []]);
+        }
+
+        try {
+            $result = (new CouponService())->deleteTemplate(intval(input('post.id', 0)));
+        } catch (\Throwable $exception) {
+            return json(['status' => 500, 'msg' => '模板删除失败：' . $exception->getMessage(), 'data' => []]);
+        }
+
+        return json([
+            'status' => $result['ok'] ? 200 : 400,
+            'msg' => $result['message'],
+            'data' => $result['data'],
+        ]);
     }
 
     public function issue()

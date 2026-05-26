@@ -64,7 +64,9 @@
 .qjy-ticket-rules { margin-top: 10px; padding: 10px 12px; border-radius: 10px; color: #64748b; background: #f8fafc; font-size: 12px; line-height: 1.75; }
 .qjy-ticket-actions { display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 8px; padding: 14px; border-left: 1px dashed #e3eaf5; background: linear-gradient(180deg, #fff, #fbfdff); }
 .qjy-ticket-status { text-align: center; color: #16a064; font-size: 12px; font-weight: 700; }
-.qjy-ticket-meta { min-height: 18px; text-align: center; color: #64748b; font-size: 12px; }
+.qjy-ticket-meta { min-height: 18px; text-align: center; color: #64748b; font-size: 12px; line-height: 1.45; }
+.qjy-ticket-actions .n-button { min-width: 0; }
+.qjy-ticket-actions .n-button__content { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qjy-rule-link { align-self: center; border: 0; color: #1677ff; background: transparent; font-size: 12px; cursor: pointer; }
 .qjy-empty { padding: 54px 0; }
 @media (max-width: 991px) {
@@ -199,7 +201,7 @@
                                 {{ coupon.claiming ? '领取中' : (coupon.claimed ? '再领一张' : '立即领取') }}
                             </n-button>
                             <n-button v-else-if="coupon.claimed" type="primary" secondary tag="a" :href="cartUrl">前往购物车</n-button>
-                            <n-button v-else type="primary" disabled>{{ coupon.claim_reason || '暂不可领' }}</n-button>
+                            <n-button v-else type="primary" disabled :title="coupon.claim_reason || '暂不可领'">{{ claimButtonText(coupon) }}</n-button>
                             <button class="qjy-rule-link" type="button" @click="toggleRule(coupon.item_key || coupon.id)">{{ openedRules[coupon.item_key || coupon.id] ? '收起规则' : '查看规则' }}</button>
                         </div>
                     </article>
@@ -339,6 +341,17 @@
                 return coupon.claim_reason || expireText(coupon);
             }
 
+            function claimButtonText(coupon) {
+                var reason = String(coupon.claim_reason || "");
+                if (coupon.sold_out || reason.indexOf("领完") !== -1) return "已领完";
+                if (reason.indexOf("实名") !== -1) return "需实名";
+                if (reason.indexOf("支付") !== -1) return "需支付";
+                if (reason.indexOf("注册") !== -1 || reason.indexOf("新用户") !== -1) return "新人专享";
+                if (reason.indexOf("已领取") !== -1 || reason.indexOf("领取过") !== -1) return "已领取";
+                if (reason.indexOf("使用") !== -1) return "先使用";
+                return "暂不可领";
+            }
+
             function limitText(coupon) {
                 var parts = [];
                 if (Number(coupon.new_user_only) === 1) {
@@ -450,6 +463,7 @@
                 statusText: statusText,
                 ticketStatus: ticketStatus,
                 ticketMeta: ticketMeta,
+                claimButtonText: claimButtonText,
                 limitText: limitText,
                 expireText: expireText,
                 toggleRule: toggleRule,
