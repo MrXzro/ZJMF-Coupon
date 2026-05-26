@@ -7,6 +7,7 @@
 
     var config = window.QingjiyunCouponConfig || {};
     var embeddedCoupons = Array.isArray(config.coupons) ? config.coupons : null;
+    var loginRequired = config.loggedIn === false;
     var pendingKey = 'qingjiyun_coupon_pending';
     var promoBox = document.getElementById('promo');
     if (!promoBox || (!config.listUrl && embeddedCoupons === null)) {
@@ -156,6 +157,10 @@
     function openModal() {
         modal.classList.add('show');
         document.body.classList.add('qjy-cart-lock');
+        if (loginRequired) {
+            renderLoginNotice();
+            return;
+        }
         loadCoupons();
     }
 
@@ -176,13 +181,40 @@
             if (!content) {
                 throw new Error('请求失败 (HTTP ' + response.status + ')：服务器未返回内容');
             }
+            var result;
             try {
-                return JSON.parse(content);
+                result = JSON.parse(content);
             } catch (exception) {
                 var clean = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (isLoginMessage(clean) || response.status === 401 || response.status === 405) {
+                    throw new Error(loginTip());
+                }
                 throw new Error('请求失败 (HTTP ' + response.status + ')：' + (clean.substring(0, 120) || '返回内容格式错误'));
             }
+            if (result && (Number(result.status) === 401 || Number(result.status) === 405) && isLoginMessage(result.msg)) {
+                throw new Error(loginTip());
+            }
+            return result;
         });
+    }
+
+    function isLoginMessage(text) {
+        return /重新登录|请先登录|登录后|未登录/.test(String(text || ''));
+    }
+
+    function loginTip() {
+        return '请先登录后使用优惠券';
+    }
+
+    function renderLoginNotice() {
+        availableCoupons = [];
+        countText.textContent = '登录后可查看可用优惠券';
+        listBox.innerHTML = '';
+        var empty = document.createElement('div');
+        empty.className = 'qjy-coupon-empty';
+        empty.textContent = loginTip();
+        listBox.appendChild(empty);
+        bestButton.disabled = true;
     }
 
     function post(url, data) {
@@ -359,6 +391,8 @@
 
     function renderCoupons() {
         listBox.innerHTML = '';
+        bestButton.disabled = false;
+        bestButton.textContent = '一键最优';
         countText.textContent = '共 ' + availableCoupons.length + ' 张可用，点击卡片立即使用';
         if (!availableCoupons.length) {
             var empty = document.createElement('div');
@@ -434,6 +468,10 @@
     }
 
     function applyBest() {
+        if (loginRequired) {
+            show(loginTip(), true);
+            return;
+        }
         if (!availableCoupons.length) {
             show('当前没有可使用的优惠券', true);
             return;
@@ -481,6 +519,10 @@
         }
         event.preventDefault();
         event.stopImmediatePropagation();
+        if (loginRequired) {
+            show(loginTip(), true);
+            return;
+        }
         validate(code).then(function (checked) {
             if (!checked.ok) {
                 show(checked.message, true);

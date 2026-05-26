@@ -152,6 +152,14 @@
     const checkinUrl = {:json_encode($CheckinUrl, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)};
     const walletUrl = {:json_encode($WalletUrl, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)};
 
+    function friendlyMessage(text) {
+        var messageText = String(text || "");
+        if (/重新登录|请先登录|登录后|未登录/.test(messageText)) {
+            return "请先登录后签到";
+        }
+        return messageText;
+    }
+
     function normalizeSummary(data) {
         return Object.assign({
             today: "",
@@ -263,10 +271,10 @@
                         summary.value = normalizeSummary(result.data);
                     }
                     if (result.status !== 200) {
-                        message.warning(result.msg || "签到未完成");
+                        message.warning(friendlyMessage(result.msg) || "签到未完成");
                         return;
                     }
-                    feedback.value = result.msg || "签到成功";
+                    feedback.value = friendlyMessage(result.msg) || "签到成功";
                     message.success(feedback.value);
                     celebrating.value = false;
                     setTimeout(function () {
@@ -278,7 +286,7 @@
                     if (result.data) {
                         summary.value = normalizeSummary(result.data);
                     }
-                    message.error(result.msg || "签到请求失败，请稍后重试");
+                    message.error(friendlyMessage(result.msg || error.message) || "签到请求失败，请稍后重试");
                 } finally {
                     checking.value = false;
                 }

@@ -269,13 +269,29 @@
             if (!content) {
                 throw new Error('请求失败 (HTTP ' + response.status + ')：服务器未返回内容');
             }
+            var result;
             try {
-                return JSON.parse(content);
+                result = JSON.parse(content);
             } catch (exception) {
                 var clean = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (isLoginMessage(clean) || response.status === 401 || response.status === 405) {
+                    throw new Error(loginTip());
+                }
                 throw new Error('请求失败 (HTTP ' + response.status + ')：' + (clean.substring(0, 120) || '返回内容格式错误'));
             }
+            if (result && (Number(result.status) === 401 || Number(result.status) === 405) && isLoginMessage(result.msg)) {
+                throw new Error(loginTip());
+            }
+            return result;
         });
+    }
+
+    function isLoginMessage(text) {
+        return /重新登录|请先登录|登录后|未登录/.test(String(text || ''));
+    }
+
+    function loginTip() {
+        return '请先登录后使用优惠券';
     }
 
     function loadCoupons() {

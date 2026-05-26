@@ -32,22 +32,24 @@
 
 ```html
 {php}
-    $qjyCouponData = \addons\qingjiyun_coupon\common\ThemeCouponProvider::usableCoupons(isset(request()->uid) ? intval(request()->uid) : 0);
+    $qjyUid = isset(request()->uid) ? intval(request()->uid) : 0;
+    $qjyCouponData = \addons\qingjiyun_coupon\common\ThemeCouponProvider::usableCoupons($qjyUid);
     $qjyCouponPrefix = (new \addons\qingjiyun_coupon\common\CouponService())->codePrefix();
 {/php}
-<script>window.QingjiyunCouponConfig={coupons:{:json_encode($qjyCouponData, JSON_UNESCAPED_UNICODE)},codePrefix:{:json_encode($qjyCouponPrefix, JSON_UNESCAPED_UNICODE)}};</script>
-<script src="/plugins/addons/qingjiyun_coupon/assets/configure-coupon.js?v=1.0.23"></script>
+<script>window.QingjiyunCouponConfig={coupons:{:json_encode($qjyCouponData, JSON_UNESCAPED_UNICODE)},codePrefix:{:json_encode($qjyCouponPrefix, JSON_UNESCAPED_UNICODE)},loggedIn:{:json_encode($qjyUid > 0)}};</script>
+<script src="/plugins/addons/qingjiyun_coupon/assets/configure-coupon.js?v=1.0.24"></script>
 ```
 
 结算页代码示例：
 
 ```html
 {php}
-    $qjyCouponData = \addons\qingjiyun_coupon\common\ThemeCouponProvider::usableCoupons(isset(request()->uid) ? intval(request()->uid) : 0);
+    $qjyUid = isset(request()->uid) ? intval(request()->uid) : 0;
+    $qjyCouponData = \addons\qingjiyun_coupon\common\ThemeCouponProvider::usableCoupons($qjyUid);
     $qjyCouponPrefix = (new \addons\qingjiyun_coupon\common\CouponService())->codePrefix();
 {/php}
-<script>window.QingjiyunCouponConfig={coupons:{:json_encode($qjyCouponData, JSON_UNESCAPED_UNICODE)},codePrefix:{:json_encode($qjyCouponPrefix, JSON_UNESCAPED_UNICODE)}};</script>
-<script src="/plugins/addons/qingjiyun_coupon/assets/cart.js?v=1.0.23"></script>
+<script>window.QingjiyunCouponConfig={coupons:{:json_encode($qjyCouponData, JSON_UNESCAPED_UNICODE)},codePrefix:{:json_encode($qjyCouponPrefix, JSON_UNESCAPED_UNICODE)},loggedIn:{:json_encode($qjyUid > 0)}};</script>
+<script src="/plugins/addons/qingjiyun_coupon/assets/cart.js?v=1.0.24"></script>
 ```
 
 `configure-coupon.js` 将已选券写入原配置表单并临时记录到下一次结算；`cart.js` 已适配当前主题的 `#promo input[name="promo"]` 结构和原生 `statuscart=promo`、`statuscart=removepromo` AJAX 接口，进入结算页后自动应用配置页选中的券。配置页与结算页直接内嵌当前用户可用券，不再请求前台 `/addons` JSON 接口。

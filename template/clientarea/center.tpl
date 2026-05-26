@@ -228,6 +228,14 @@
     const walletUrl = {:json_encode($WalletUrl, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)};
     const cartUrl = {:json_encode($CartUrl, JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)};
 
+    function friendlyMessage(text) {
+        var messageText = String(text || "");
+        if (/重新登录|请先登录|登录后|未登录/.test(messageText)) {
+            return "请先登录后领取优惠券";
+        }
+        return messageText;
+    }
+
     function asArray(value) {
         return Array.isArray(value) ? value : [];
     }
@@ -420,10 +428,10 @@
                             coupon.can_claim = previousCanClaim;
                             coupon.claim_reason = previousClaimReason;
                         }
-                        message.warning(result.msg || "领取失败");
+                        message.warning(friendlyMessage(result.msg) || "领取失败");
                         return;
                     }
-                    message.success(result.msg || "领取成功");
+                    message.success(friendlyMessage(result.msg) || "领取成功");
                     page.value = "claimed";
                     category.value = "all";
                 } catch (error) {
@@ -434,7 +442,7 @@
                         coupon.can_claim = previousCanClaim;
                         coupon.claim_reason = previousClaimReason;
                     }
-                    message.error(result.msg || "领取请求失败，请稍后重试");
+                    message.error(friendlyMessage(result.msg || error.message) || "领取请求失败，请稍后重试");
                 } finally {
                     coupon.claiming = false;
                     claimingId.value = 0;
